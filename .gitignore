@@ -1,0 +1,4 @@
+*.env
+!template.env
+/node_modules
+db.csv
