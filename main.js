@@ -27,7 +27,7 @@ while (true) {
 	counter++
 }
 if (CONTRACT_ADDR_LIST.length <= 0) {
-	console.log('No pool addresses detected, terminating...')
+	console.error('No pool addresses detected, terminating...')
 	process.exit(1)
 }
 console.log(`${counter - 1} pool addresses found.`)
@@ -49,17 +49,6 @@ async function scrapeBalance(abi, contract_addr) {
 	return balance.toFixed(2)
 }
 
-async function saveCSV(balance) {
-	const now = new Date()
-	const content = `${now.toISOString()},${balance}\n`
-	try {
-		await fsPromises.appendFile(CSV_PATH, content)
-		console.log('successfully saved.')
-	} catch(e) {
-		console.log(e)
-	}
-}
-
 async function main() {
 
 	// connect to database
@@ -69,7 +58,7 @@ async function main() {
 		console.log('Connected to database')
 	})
 	.catch((e) => {
-		console.log('Failed to connect to database: ' + e)
+		console.error('Failed to connect to database: ' + e)
 		process.exit(1)
 	})
 
@@ -79,23 +68,22 @@ async function main() {
 	// read all contract
 	for (let i = 0; i < CONTRACT_ADDR_LIST.length; i++) {
 		// get contract ABI
+		console.log(`[pool ${i}] contract address ${CONTRACT_ADDR_LIST[i]}`)
 		console.log(`[pool ${i}] reading ABI...`)
-		console.log(`[pool ${i}] ${CONTRACT_ADDR_LIST[i]}`)
 		const abi = await getABI(CONTRACT_ADDR_LIST[i])
 		if (abi === undefined) {
-			console.log(`[pool ${i}] failed to fetch balance`)
+			console.warn(`[pool ${i}] failed to fetch balance`)
 		} else {
 			// read user balance from contract
 			const balance = await scrapeBalance(abi, CONTRACT_ADDR_LIST[i])
 			console.log(`[pool ${i}] balance: ${balance}`)
-
 			// create a snapshot
 			const snapshot = new PoolSnapshot({
 				pool_addr: CONTRACT_ADDR_LIST[i],
 				time: new Date(),
 				balance: balance,
 			})
-
+			// push to database
 			await snapshot.save()
 		}
 	}
