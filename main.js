@@ -4,6 +4,8 @@ const axios = require('axios')
 const fs = require('fs')
 const fsPromises = fs.promises
 const path = require('path')
+const mongoose = require('mongoose');
+const {PoolSnapshot} = require('./model/pool_snapshot')
 
 
 // Constants (from ENV variables)
@@ -28,7 +30,7 @@ if (CONTRACT_ADDR_LIST.length <= 0) {
 	console.log('No pool addresses detected, terminating...')
 	process.exit(1)
 }
-console.log(`${counter} pool addresses found.`)
+console.log(`${counter - 1} pool addresses found.`)
 
 async function getABI(contract_addr) {
 	try {
@@ -59,6 +61,18 @@ async function saveCSV(balance) {
 }
 
 async function main() {
+
+	// connect to database
+	console.log('Attempt to connect ot MongoDB')
+	mongoose.connect('mongodb://localhost:27017/cartesi_pool')
+	.then(() => {
+		console.log('Connected to database')
+	})
+	.catch((e) => {
+		console.log('Failed to connect to database: ' + e)
+		process.exit(1)
+	})
+
 	// connect to ethereum gateway
 	console.log('Setting provider...')
 	Contract.setProvider(PROVIDER)
@@ -74,10 +88,20 @@ async function main() {
 			// read user balance from contract
 			const balance = await scrapeBalance(abi, CONTRACT_ADDR_LIST[i])
 			console.log(`[pool ${i}] balance: ${balance}`)
-			// saveCSV(balance)
+
+			// create a snapshot
+			const snapshot = new PoolSnapshot({
+				pool_addr: CONTRACT_ADDR_LIST[i],
+				time: new Date(),
+				balance: balance,
+			})
+
+			await snapshot.save()
 		}
 	}
+	// disconnect from ethereum gateway and MongoDB
 	Contract.currentProvider.disconnect()
+	mongoose.connection.close()
 }
 
 main()
