@@ -10,21 +10,37 @@ const path = require('path')
 const API_KEY = process.env.API_KEY
 const PROVIDER = process.env.PROVIDER
 const USER_ADDR = process.env.USER_ADDR
-const CONTRACT_ADDR = process.env.CONTRACT_ADDR
 const CSV_PATH = path.join(process.env.SAVE_PATH, process.env.SAVE_NAME)
 
-async function getABI() {
+// get all pool contract addresses
+const CONTRACT_ADDR_LIST = []
+let counter = 1
+while (true) {
+	if (process.env[`CONTRACT_ADDR_${counter}`] !== undefined) {
+		// contract addr found, add to list
+		CONTRACT_ADDR_LIST.push(process.env[`CONTRACT_ADDR_${counter}`])
+	} else {
+		break
+	}
+	counter++
+}
+if (CONTRACT_ADDR_LIST.length <= 0) {
+	console.log('No pool addresses detected, terminating...')
+	process.exit(1)
+}
+console.log(`${counter} pool addresses found.`)
+
+async function getABI(contract_addr) {
 	try {
-		const res = await axios.get(`https://api.etherscan.io/api?module=contract&action=getabi&address=${CONTRACT_ADDR}&apikey=${API_KEY}`)
+		const res = await axios.get(`https://api.etherscan.io/api?module=contract&action=getabi&address=${contract_addr}&apikey=${API_KEY}`)
 		return JSON.parse(res.data.result)
 	} catch (e) {
-		console.log(e)
 		return undefined
 	}
 }
 
-async function scrapeBalance(abi) {
-	const MyContract = new Contract(abi, CONTRACT_ADDR)
+async function scrapeBalance(abi, contract_addr) {
+	const MyContract = new Contract(abi, contract_addr)
 	const {shares} = await MyContract.methods.userBalance(USER_ADDR).call()
 	const res = await MyContract.methods.sharesToAmount(shares).call()
 	let balance = res / 1000000000000000000
@@ -43,12 +59,23 @@ async function saveCSV(balance) {
 }
 
 async function main() {
+	// connect to ethereum gateway
+	console.log('Setting provider...')
 	Contract.setProvider(PROVIDER)
-	const abi = await getABI()
-	if (abi !== undefined) {
-		const balance = await scrapeBalance(abi)
-		console.log(balance)
-		saveCSV(balance)
+	// read all contract
+	for (let i = 0; i < CONTRACT_ADDR_LIST.length; i++) {
+		// get contract ABI
+		console.log(`[pool ${i}] reading ABI...`)
+		console.log(`[pool ${i}] ${CONTRACT_ADDR_LIST[i]}`)
+		const abi = await getABI(CONTRACT_ADDR_LIST[i])
+		if (abi === undefined) {
+			console.log(`[pool ${i}] failed to fetch balance`)
+		} else {
+			// read user balance from contract
+			const balance = await scrapeBalance(abi, CONTRACT_ADDR_LIST[i])
+			console.log(`[pool ${i}] balance: ${balance}`)
+			// saveCSV(balance)
+		}
 	}
 	Contract.currentProvider.disconnect()
 }
