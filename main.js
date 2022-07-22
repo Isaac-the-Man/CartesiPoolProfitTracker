@@ -12,7 +12,6 @@ const {PoolSnapshot} = require('./model/pool_snapshot')
 const API_KEY = process.env.API_KEY
 const PROVIDER = process.env.PROVIDER
 const USER_ADDR = process.env.USER_ADDR
-const CSV_PATH = path.join(process.env.SAVE_PATH, process.env.SAVE_NAME)
 
 // get all pool contract addresses
 const CONTRACT_ADDR_LIST = []
